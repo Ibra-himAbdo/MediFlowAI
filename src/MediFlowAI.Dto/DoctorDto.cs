@@ -8,4 +8,5 @@ public sealed record DoctorDto(
     decimal ConsultationFee,
     double AverageRate,
     int TotalReviews,
-    bool IsActive);
+    bool IsActive,
+    IReadOnlyList<DoctorSlotDto> AvailableSlots);
