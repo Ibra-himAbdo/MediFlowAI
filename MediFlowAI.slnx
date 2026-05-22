@@ -1,2 +1,6 @@
 <Solution>
+  <Project Path="src/MediFlowAI.Application/MediFlowAI.Application.csproj" />
+  <Project Path="src/MediFlowAI.Api/MediFlowAI.Api.csproj" />
+  <Project Path="src/MediFlowAI.Domain/MediFlowAI.Domain.csproj" />
+  <Project Path="src/MediFlowAI.Infrastructure/MediFlowAI.Infrastructure.csproj" />
 </Solution>
