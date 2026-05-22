@@ -1,7 +1,7 @@
 namespace MediFlowAI.Api.Controllers;
 
 [ApiController]
-[Route("api/specializations")]
+[Route("api/[controller]")]
 public class SpecializationsController(ISpecializationService specializationService) : ControllerBase
 {
     [HttpGet]
