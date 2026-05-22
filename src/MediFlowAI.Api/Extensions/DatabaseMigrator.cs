@@ -250,7 +250,8 @@ public static class DatabaseMigrator
 
     private static List<DoctorSchedule> CreateSchedulesForRange(IEnumerable<Doctor> doctors, DateTime utcNow)
     {
-        int[] slotHours = [9, 10, 11, 14, 15, 16];
+        // UTC hours: morning, afternoon, and evening (22 = 10 PM) for time-specific booking demos
+        int[] slotHours = [9, 10, 11, 14, 15, 16, 18, 19, 20, 21, 22];
         (DateTime rangeStart, DateTime rangeEnd) = GetScheduleRange(utcNow);
         List<Doctor> activeDoctors = doctors.Where(d => d.IsActive).OrderBy(d => d.Id).ToList();
         List<DoctorSchedule> schedules = [];

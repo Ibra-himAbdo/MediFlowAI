@@ -146,8 +146,8 @@ public class AiToolRegister
 
         yield return CreateTool(nameof(MediFlowAiTools.GetAvailableSlotsByDoctorNameAsync),
             "get_available_slots_by_doctor_name",
-            "Slots for a doctor by name. doctorName: text. date: yyyy-MM-dd.",
-            typeof(string), typeof(string));
+            "Slots for a doctor by name. doctorName: text. date: yyyy-MM-dd or empty for UTC today. preferredTime: optional HH:mm UTC (22:00 = 10 PM).",
+            typeof(string), typeof(string), typeof(string));
 
         yield return CreateTool(nameof(MediFlowAiTools.GetAvailableSlotsAsync), "get_available_slots",
             "Slots for one doctor. doctorId: exact UUID from doctor list. date: yyyy-MM-dd.",

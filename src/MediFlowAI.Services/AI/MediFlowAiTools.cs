@@ -20,6 +20,9 @@ public sealed class MediFlowAiTools(
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
+    private static readonly string[] ClinicSlotHoursUtc =
+        ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00", "18:00", "19:00", "20:00", "21:00", "22:00"];
+
     #region Date
 
     public Task<string> GetDateAsync(CancellationToken cancellationToken = default)
@@ -35,7 +38,8 @@ public sealed class MediFlowAiTools(
             utcTomorrow = utcToday.AddDays(1).ToString("yyyy-MM-dd"),
             utcYesterday = utcToday.AddDays(-1).ToString("yyyy-MM-dd"),
             dayOfWeek = utcToday.DayOfWeek.ToString(),
-            hint = "Use utcToday/utcTomorrow for yyyy-MM-dd tool dates. Demo schedules: UTC today minus 3 days through plus 10 days."
+            clinicSlotHoursUtc = ClinicSlotHoursUtc,
+            hint = "Use utcToday/utcTomorrow for yyyy-MM-dd tool dates. For 10 PM use preferredTime 22:00. Demo schedules: UTC today minus 3 days through plus 10 days."
         }));
     }
 
@@ -224,9 +228,11 @@ public sealed class MediFlowAiTools(
     public async Task<string> GetAvailableSlotsByDoctorNameAsync(
         string doctorName,
         string date,
+        [Description("Optional requested start time in 24h UTC (HH:mm). Use 22:00 for 10 PM, 10:00 for 10 AM.")]
+        string preferredTime,
         CancellationToken cancellationToken = default)
     {
-        if (!TryParseDate(date, out DateOnly day, out string? dateError))
+        if (!TryResolveSlotsDate(date, out DateOnly day, out string? dateError, defaultToToday: true))
         {
             return dateError;
         }
@@ -242,7 +248,44 @@ public sealed class MediFlowAiTools(
         IReadOnlyList<DoctorSlotDto> slots =
             await schedules.GetAvailableSlotsAsync(doctor.Id, day, cancellationToken);
 
-        return SerializeWithDateContext(day, new { doctor, slots });
+        TimeOnly? preferred = TryParsePreferredTime(preferredTime);
+        DoctorSlotDto? matchedSlot = preferred is null
+            ? null
+            : slots.FirstOrDefault(s => TimeOnly.FromDateTime(s.StartTime) == preferred.Value);
+
+        DateOnly? nextAvailableDate = null;
+        if (matchedSlot is null && preferred is not null)
+        {
+            for (int offset = 1; offset <= ScheduleDaysAfter; offset++)
+            {
+                DateOnly candidateDay = day.AddDays(offset);
+                IReadOnlyList<DoctorSlotDto> futureSlots =
+                    await schedules.GetAvailableSlotsAsync(doctor.Id, candidateDay, cancellationToken);
+
+                matchedSlot = futureSlots.FirstOrDefault(s =>
+                    TimeOnly.FromDateTime(s.StartTime) == preferred.Value);
+
+                if (matchedSlot is not null)
+                {
+                    nextAvailableDate = candidateDay;
+                    break;
+                }
+            }
+        }
+
+        return SerializeWithDateContext(day, new
+        {
+            doctor,
+            requestedDate = day.ToString("yyyy-MM-dd"),
+            preferredTime = preferred?.ToString("HH:mm"),
+            preferredTimeMatched = matchedSlot is not null,
+            suggestedScheduleId = matchedSlot?.Id,
+            nextAvailableDate = nextAvailableDate?.ToString("yyyy-MM-dd"),
+            clinicSlotHoursUtc = ClinicSlotHoursUtc,
+            availableTimesUtc = slots.Select(s => TimeOnly.FromDateTime(s.StartTime).ToString("HH:mm")).ToList(),
+            slots,
+            hint = BuildSlotHint(preferred, matchedSlot, slots, nextAvailableDate)
+        });
     }
 
     public async Task<string> GetAvailableSlotsForSpecializationAsync(
@@ -483,17 +526,81 @@ public sealed class MediFlowAiTools(
         return false;
     }
 
+    private const int ScheduleDaysAfter = 10;
+
+    private static string BuildSlotHint(
+        TimeOnly? preferred,
+        DoctorSlotDto? matchedSlot,
+        IReadOnlyList<DoctorSlotDto> slots,
+        DateOnly? nextAvailableDate)
+    {
+        if (preferred is null)
+        {
+            return slots.Count == 0
+                ? "No free slots on this date. Try another date or list availableTimesUtc on nearby days."
+                : "Pick a slot id from slots, then book_appointment.";
+        }
+
+        if (matchedSlot is not null)
+        {
+            return nextAvailableDate is null
+                ? "preferredTimeMatched on requested date. Use suggestedScheduleId with book_appointment."
+                : $"preferredTimeMatched on {nextAvailableDate:yyyy-MM-dd}. Use suggestedScheduleId with book_appointment.";
+        }
+
+        return slots.Count == 0
+            ? $"No slot at {preferred:HH:mm} UTC on this date and none in the next {ScheduleDaysAfter} days. Clinic hours: {string.Join(", ", ClinicSlotHoursUtc)} UTC."
+            : $"No slot at {preferred:HH:mm} UTC on this date. availableTimesUtc lists open times; use 22:00 for 10 PM or book another time.";
+    }
+
+    private static TimeOnly? TryParsePreferredTime(string? preferredTime)
+    {
+        if (string.IsNullOrWhiteSpace(preferredTime))
+        {
+            return null;
+        }
+
+        string trimmed = preferredTime.Trim();
+
+        if (TimeOnly.TryParse(trimmed, out TimeOnly time))
+        {
+            return time;
+        }
+
+        if (trimmed.Equals("10 PM", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("10pm", StringComparison.OrdinalIgnoreCase))
+        {
+            return new TimeOnly(22, 0);
+        }
+
+        if (trimmed.Equals("10 AM", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("10am", StringComparison.OrdinalIgnoreCase))
+        {
+            return new TimeOnly(10, 0);
+        }
+
+        return null;
+    }
+
     private static bool TryResolveSlotsDate(
         string? date,
         out DateOnly? slotsDate,
         out string errorJson,
-        bool defaultToTomorrow = false)
+        bool defaultToTomorrow = false,
+        bool defaultToToday = false)
     {
         if (string.IsNullOrWhiteSpace(date))
         {
             if (defaultToTomorrow)
             {
                 slotsDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
+                errorJson = string.Empty;
+                return true;
+            }
+
+            if (defaultToToday)
+            {
+                slotsDate = DateOnly.FromDateTime(DateTime.UtcNow);
                 errorJson = string.Empty;
                 return true;
             }
@@ -519,9 +626,10 @@ public sealed class MediFlowAiTools(
         string? date,
         out DateOnly slotsDate,
         out string errorJson,
-        bool defaultToTomorrow = false)
+        bool defaultToTomorrow = false,
+        bool defaultToToday = false)
     {
-        if (TryResolveSlotsDate(date, out DateOnly? optionalDate, out errorJson, defaultToTomorrow)
+        if (TryResolveSlotsDate(date, out DateOnly? optionalDate, out errorJson, defaultToTomorrow, defaultToToday)
             && optionalDate is not null)
         {
             slotsDate = optionalDate.Value;
