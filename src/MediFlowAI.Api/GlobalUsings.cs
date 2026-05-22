@@ -3,6 +3,7 @@
 global using System.Diagnostics;
 
 global using Scalar.AspNetCore;
+global using Bogus;
 
 global using MediFlowAI.Api;
 global using MediFlowAI.Infrastructure;
