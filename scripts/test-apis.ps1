@@ -53,7 +53,26 @@ Write-Step "GET /api/Specializations/{id}"
 $r = Curl-Json "$Base/api/Specializations/$specId"
 Expect-Ok "GET /api/Specializations/{id}" $r | Out-Null
 
-# 2. Doctors
+Write-Step "GET /api/Specializations/search?q=card"
+$r = Curl-Json "$Base/api/Specializations/search?q=card"
+if (-not (Expect-Ok "GET /api/Specializations/search" $r)) { exit 1 }
+
+# 2. Patients
+$demoPatientId = "019e513f-b4aa-7dc3-aa1d-2ed781164ae0"
+
+Write-Step "GET /api/Patients"
+$r = Curl-Json "$Base/api/Patients"
+if (-not (Expect-Ok "GET /api/Patients" $r)) { exit 1 }
+
+Write-Step "GET /api/Patients/{id} (demo)"
+$r = Curl-Json "$Base/api/Patients/$demoPatientId"
+if (-not (Expect-Ok "GET /api/Patients/{id}" $r)) { exit 1 }
+
+Write-Step "GET /api/Patients/search?q=Demo"
+$r = Curl-Json "$Base/api/Patients/search?q=Demo"
+if (-not (Expect-Ok "GET /api/Patients/search" $r)) { exit 1 }
+
+# 3. Doctors
 Write-Step "GET /api/Doctors"
 $r = Curl-Json "$Base/api/Doctors"
 if (-not (Expect-Ok "GET /api/Doctors" $r)) { exit 1 }
@@ -80,7 +99,7 @@ Write-Step "GET /api/Doctors/search empty (expect 400)"
 $r = Curl-Json "$Base/api/Doctors/search?q="
 Expect-Ok "GET /api/Doctors/search empty" $r -Allowed @(400) | Out-Null
 
-# 3. Schedules
+# 4. Schedules
 $from = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd")
 $to = (Get-Date).ToUniversalTime().AddDays(14).ToString("yyyy-MM-dd")
 
@@ -122,7 +141,7 @@ Write-Step "GET /api/Schedules/{id}/available"
 $r = Curl-Json "$Base/api/Schedules/$scheduleId/available"
 Expect-Ok "GET /api/Schedules/{id}/available" $r | Out-Null
 
-# 4. Resolve patient
+# 5. Resolve patient (prefer demo AI patient)
 $patientId = $null
 Write-Step "GET /api/Appointments/doctor/{id}"
 $r = Curl-Json "$Base/api/Appointments/doctor/$doctorId"
@@ -141,10 +160,14 @@ else {
         }
     }
 }
-if (-not $patientId) { Fail "Resolve patientId" "No appointments in DB" }
+if (-not $patientId) {
+    $patientId = $demoPatientId
+    Write-Host "  patientId=$patientId (demo patient)"
+    Pass "Resolve patientId (demo fallback)"
+}
 else { Write-Host "  patientId=$patientId" }
 
-# 5. Appointments
+# 6. Appointments
 Write-Step "POST /api/Appointments/book"
 $bookBody = "{`"patientId`":`"$patientId`",`"doctorScheduleId`":`"$scheduleId`"}"
 $r = Curl-Json "$Base/api/Appointments/book" -Method POST -Body $bookBody
@@ -175,7 +198,7 @@ Write-Step "GET /api/Appointments/{id} (Completed)"
 $r = Curl-Json "$Base/api/Appointments/$appointmentId"
 if ($r.Json.status -eq "Completed") { Pass "GET appointment status Completed" } else { Fail "GET appointment status" $r.Json.status }
 
-# 6. Reviews
+# 7. Reviews
 Write-Step "POST /api/Reviews"
 $reviewBody = "{`"appointmentId`":`"$appointmentId`",`"rate`":5,`"comment`":`"API curl test`"}"
 $r = Curl-Json "$Base/api/Reviews" -Method POST -Body $reviewBody
