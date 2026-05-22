@@ -1,7 +1,10 @@
+using MediFlowAI.Services;
+
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddServices();
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
