@@ -19,4 +19,18 @@ public class SpecializationService(AppDbContext db) : ISpecializationService
             .Select(s => new SpecializationDto(s.Id, s.Name ?? string.Empty))
             .FirstOrDefaultAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<SpecializationDto>> SearchByNameAsync(
+        string name,
+        CancellationToken cancellationToken = default)
+    {
+        string normalizedName = name.Trim().ToLower();
+
+        return await db.Specializations
+            .AsNoTracking()
+            .Where(s => s.Name != null && s.Name.ToLower().Contains(normalizedName))
+            .OrderBy(s => s.Name)
+            .Select(s => new SpecializationDto(s.Id, s.Name ?? string.Empty))
+            .ToListAsync(cancellationToken);
+    }
 }

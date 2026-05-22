@@ -11,6 +11,19 @@ public class SpecializationsController(ISpecializationService specializationServ
         return Ok(specializations);
     }
 
+    [HttpGet("search")]
+    public async Task<ActionResult<IReadOnlyList<SpecializationDto>>> Search(
+        [FromQuery] string q,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(q))
+        {
+            return BadRequest("Query parameter 'q' is required.");
+        }
+
+        return Ok(await specializationService.SearchByNameAsync(q, cancellationToken));
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<SpecializationDto>> GetById(Guid id, CancellationToken cancellationToken)
     {
