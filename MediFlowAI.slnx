@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/SolutionItems/">
+    <File Path="AI Integration Steps.md" />
+  </Folder>
   <Project Path="src/MediFlowAI.Api/MediFlowAI.Api.csproj" />
   <Project Path="src/MediFlowAI.Domain/MediFlowAI.Domain.csproj" />
   <Project Path="src/MediFlowAI.Dto/MediFlowAI.Dto.csproj" />
