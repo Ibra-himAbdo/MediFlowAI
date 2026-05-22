@@ -20,6 +20,27 @@ public sealed class MediFlowAiTools(
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
+    #region Date
+
+    public Task<string> GetDateAsync(CancellationToken cancellationToken = default)
+    {
+        _ = cancellationToken;
+        DateTime utcNow = DateTime.UtcNow;
+        DateOnly utcToday = DateOnly.FromDateTime(utcNow);
+
+        return Task.FromResult(Serialize(new
+        {
+            utcNow = utcNow.ToString("O"),
+            utcToday = utcToday.ToString("yyyy-MM-dd"),
+            utcTomorrow = utcToday.AddDays(1).ToString("yyyy-MM-dd"),
+            utcYesterday = utcToday.AddDays(-1).ToString("yyyy-MM-dd"),
+            dayOfWeek = utcToday.DayOfWeek.ToString(),
+            hint = "Use utcToday/utcTomorrow for yyyy-MM-dd tool dates. Demo schedules: UTC today minus 3 days through plus 10 days."
+        }));
+    }
+
+    #endregion
+
     #region Specializations
 
     public Task<string> GetAllSpecializationsAsync(CancellationToken cancellationToken = default) =>

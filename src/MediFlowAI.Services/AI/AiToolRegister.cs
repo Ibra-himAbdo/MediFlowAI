@@ -20,6 +20,11 @@ public class AiToolRegister
 
     private IEnumerable<AITool> GetAiTools()
     {
+        foreach (AITool tool in GetUtilityTools())
+        {
+            yield return tool;
+        }
+
         foreach (AITool tool in GetSpecializationTools())
         {
             yield return tool;
@@ -50,6 +55,16 @@ public class AiToolRegister
             yield return tool;
         }
     }
+
+    #region Utility
+
+    private IEnumerable<AITool> GetUtilityTools()
+    {
+        yield return CreateTool(nameof(MediFlowAiTools.GetDateAsync), "get_date",
+            "Current UTC date/time for the server. Call before interpreting today, tomorrow, or yyyy-MM-dd dates — do not assume 2024.");
+    }
+
+    #endregion
 
     #region Specializations
 
