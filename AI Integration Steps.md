@@ -291,7 +291,7 @@ GET /api/Doctors?date=2026-05-26
 |------|--------|
 | `get_all_specializations` | List all; copy `id` for UUID tools |
 | `get_specialization_by_id` | `id` = UUID string |
-| `search_specializations` | `name` = text, e.g. Cardiology |
+| `search_specializations` | `specializationName` = plain text, e.g. Cardiology (not a JSON object) |
 
 **Patients (3)**
 

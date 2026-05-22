@@ -1,4 +1,6 @@
 ﻿using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.AI;
 
 namespace MediFlowAI.Services;
@@ -61,7 +63,7 @@ public class AiToolRegister
             typeof(string));
 
         yield return CreateTool(nameof(MediFlowAiTools.SearchSpecializationsAsync), "search_specializations",
-            "Find specializations by name. name: text like Cardiology (not a UUID).",
+            "Find specializations by name. specializationName: plain text only (e.g. Cardiology), never a JSON object.",
             typeof(string));
     }
 
@@ -213,8 +215,62 @@ public class AiToolRegister
             new AIFunctionFactoryOptions
             {
                 Name = toolName,
-                Description = description
+                Description = description,
+                ConfigureParameterBinding = parameter =>
+                {
+                    if (parameter.ParameterType != typeof(string))
+                    {
+                        return default;
+                    }
+
+                    string parameterName = parameter.Name!;
+
+                    return new AIFunctionFactoryOptions.ParameterBindingOptions
+                    {
+                        BindParameter = (_, arguments) =>
+                        {
+                            if (!arguments.TryGetValue(parameterName, out object? raw) || raw is null)
+                            {
+                                return null;
+                            }
+
+                            return CoerceToPlainString(raw);
+                        }
+                    };
+                }
             });
+    }
+
+    private static string? CoerceToPlainString(object raw)
+    {
+        switch (raw)
+        {
+            case string text:
+                return text;
+            case JsonElement element:
+                return CoerceJsonElementToString(element);
+            case JsonNode node:
+                return CoerceJsonElementToString(node.Deserialize<JsonElement>());
+            case JsonDocument document:
+                return CoerceJsonElementToString(document.RootElement.Clone());
+            default:
+                return raw.ToString();
+        }
+    }
+
+    private static string? CoerceJsonElementToString(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Object when element.TryGetProperty("name", out JsonElement nameProp) =>
+                nameProp.GetString(),
+            JsonValueKind.Object when element.TryGetProperty("specializationName", out JsonElement specProp) =>
+                specProp.GetString(),
+            JsonValueKind.Object when element.TryGetProperty("query", out JsonElement queryProp) =>
+                queryProp.GetString(),
+            _ => element.ToString()
+        };
     }
 
     #endregion

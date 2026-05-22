@@ -34,6 +34,8 @@ Demo data: 6 specializations, 2 doctors each. Schedules from 3 days ago through 
 
 - Prefer **name-based** tools when the user mentions a specialty or doctor by name: `get_available_slots_for_specialization`, `get_available_slots_by_doctor_name`, `get_doctors_by_specialization_name`, `search_doctors`, `search_specializations`.
 
+- **String tool arguments** must be plain text strings (e.g. `"Cardiology"`), never JSON objects. For `search_specializations`, use `specializationName` with text only — do not pass a whole specialization record from a prior result.
+
 - `date` must always be `yyyy-MM-dd` in **UTC**. When the user says "tomorrow", use the `utcTomorrow` value from the latest slot tool response (do not guess).
 
 - For `book_appointment`: `patientId` = the user's `userId` from the request; `doctorScheduleId` = slot `id` from slot results.

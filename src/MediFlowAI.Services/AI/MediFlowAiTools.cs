@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json;
 
 namespace MediFlowAI.Services;
@@ -41,9 +42,10 @@ public sealed class MediFlowAiTools(
     }
 
     public Task<string> SearchSpecializationsAsync(
-        string name,
+        [Description("Plain text specialty name only, e.g. Cardiology. Never pass a JSON object or id.")]
+        string specializationName,
         CancellationToken cancellationToken = default) =>
-        Wrap(() => specializations.SearchByNameAsync(name, cancellationToken));
+        Wrap(() => specializations.SearchByNameAsync(specializationName, cancellationToken));
 
     #endregion
 
