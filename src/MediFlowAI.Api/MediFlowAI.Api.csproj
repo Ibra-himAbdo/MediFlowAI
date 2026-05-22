@@ -4,6 +4,7 @@
         <TargetFramework>net10.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>1ec26ec0-4237-4e45-8960-15e3405c6468</UserSecretsId>
     </PropertyGroup>
 
     <ItemGroup>
@@ -23,6 +24,10 @@
     <ItemGroup>
       <ProjectReference Include="..\MediFlowAI.Services\MediFlowAI.Services.csproj" />
       <ProjectReference Include="..\MediFlowAI.Infrastructure\MediFlowAI.Infrastructure.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Include="system-prompt.md" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
 </Project>
