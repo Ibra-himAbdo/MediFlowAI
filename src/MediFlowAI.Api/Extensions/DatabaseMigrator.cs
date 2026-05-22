@@ -2,6 +2,10 @@ namespace MediFlowAI.Api;
 
 public static class DatabaseMigrator
 {
+    private const int ScheduleDaysBefore = 3;
+    private const int ScheduleDaysAfter = 10;
+    private const int DoctorsPerSpecialization = 2;
+
     private static readonly string[] SpecializationNames =
     [
         "Cardiology",
@@ -28,6 +32,8 @@ public static class DatabaseMigrator
             await dbContext.Database.MigrateAsync();
 
             bool seeded = await SeedDatabaseAsync(dbContext, logger);
+            await EnsureDemoPatientAsync(dbContext, logger);
+            await EnsureScheduleRangeAsync(dbContext, logger);
 
             stopwatch.Stop();
             logger.LogInformation(
@@ -57,6 +63,7 @@ public static class DatabaseMigrator
 
         logger.LogInformation("Seeding database with dummy data...");
         Faker faker = new(locale: "en");
+        DateTime utcNow = DateTime.UtcNow;
 
         List<Specialization> specializations = SpecializationNames
             .Select(name => new Specialization
@@ -68,34 +75,41 @@ public static class DatabaseMigrator
         List<Doctor> doctors = [];
         foreach (Specialization specialization in specializations)
         {
-            int doctorCount = faker.Random.Int(2, 3);
-            for (int i = 0; i < doctorCount; i++)
+            for (int i = 0; i < DoctorsPerSpecialization; i++)
             {
                 doctors.Add(new Doctor
                 {
                     Name = $"Dr. {faker.Name.FullName()}",
                     SpecializationId = specialization.Id,
                     ConsultationFee = faker.Random.Decimal(80, 350),
-                    IsActive = faker.Random.Bool(0.92f),
+                    IsActive = true,
                     AverageRate = 0,
                     TotalReviews = 0
                 });
             }
         }
 
-        List<Patient> patients = new Faker<Patient>("en")
-            .RuleFor(p => p.Id, _ => Guid.CreateVersion7())
-            .RuleFor(p => p.FullName, f => f.Name.FullName())
-            .RuleFor(p => p.PhoneNumber, f => f.Phone.PhoneNumber("01#########"))
-            .RuleFor(p => p.BirthDate, f => f.Date.Past(60, DateTime.UtcNow.AddYears(-18)))
-            .Generate(25);
+        List<Patient> patients =
+        [
+            new Patient
+            {
+                Id = DemoPatient.Id,
+                FullName = DemoPatient.FullName,
+                PhoneNumber = DemoPatient.PhoneNumber,
+                BirthDate = DateTime.UtcNow.AddYears(-30)
+            },
+            .. new Faker<Patient>("en")
+                .RuleFor(p => p.Id, _ => Guid.CreateVersion7())
+                .RuleFor(p => p.FullName, f => f.Name.FullName())
+                .RuleFor(p => p.PhoneNumber, f => f.Phone.PhoneNumber("01#########"))
+                .RuleFor(p => p.BirthDate, f => f.Date.Past(60, DateTime.UtcNow.AddYears(-18)))
+                .Generate(24)
+        ];
 
-        List<DoctorSchedule> schedules = GenerateSchedules(doctors, faker);
+        List<DoctorSchedule> schedules = CreateSchedulesForRange(doctors, utcNow);
 
         List<Appointment> appointments = [];
         List<Review> reviews = [];
-
-        DateTime now = DateTime.UtcNow;
 
         foreach (DoctorSchedule schedule in schedules.OrderBy(s => s.StartTime))
         {
@@ -105,7 +119,7 @@ public static class DatabaseMigrator
             }
 
             Patient patient = faker.PickRandom(patients);
-            AppointmentStatus status = schedule.StartTime < now
+            AppointmentStatus status = schedule.StartTime < utcNow
                 ? AppointmentStatus.Completed
                 : faker.PickRandom(AppointmentStatus.Pending, AppointmentStatus.Confirmed);
 
@@ -115,7 +129,7 @@ public static class DatabaseMigrator
                 PatientId = patient.Id,
                 DoctorScheduleId = schedule.Id,
                 Status = status,
-                CreatedAt = faker.Date.Between(schedule.StartTime.AddDays(-14), now)
+                CreatedAt = faker.Date.Between(schedule.StartTime.AddDays(-14), utcNow)
             };
 
             appointments.Add(appointment);
@@ -152,48 +166,110 @@ public static class DatabaseMigrator
         await db.Reviews.AddRangeAsync(reviews);
         await db.SaveChangesAsync();
 
+        (DateTime rangeStart, DateTime rangeEnd) = GetScheduleRange(utcNow);
         logger.LogInformation(
-            "Seed complete: {Specializations} specializations, {Doctors} doctors, {Patients} patients, {Schedules} slots ({Booked} booked), {Reviews} reviews",
+            "Seed complete: {Specializations} specializations, {Doctors} doctors ({PerSpec} per specialty), {Patients} patients, {Schedules} slots ({Booked} booked), {Reviews} reviews. Schedule range: {From:yyyy-MM-dd} to {To:yyyy-MM-dd}",
             specializations.Count,
             doctors.Count,
+            DoctorsPerSpecialization,
             patients.Count,
             schedules.Count,
             appointments.Count,
-            reviews.Count);
+            reviews.Count,
+            rangeStart,
+            rangeEnd.AddDays(-1));
 
         return true;
     }
 
-    private static List<DoctorSchedule> GenerateSchedules(List<Doctor> doctors, Faker faker)
+    /// <summary>
+    /// Ensures the demo AI patient exists (for booking/reviews when UserId is omitted).
+    /// </summary>
+    private static async Task EnsureDemoPatientAsync(AppDbContext db, ILogger logger)
     {
-        List<DoctorSchedule> schedules = [];
-        DateTime startDate = DateTime.UtcNow.Date;
-
-        foreach (Doctor doctor in doctors.Where(d => d.IsActive))
+        if (await db.Patients.AnyAsync(p => p.Id == DemoPatient.Id))
         {
-            int slotsForDoctor = faker.Random.Int(18, 28);
+            return;
+        }
 
-            for (int i = 0; i < slotsForDoctor; i++)
+        await db.Patients.AddAsync(new Patient
+        {
+            Id = DemoPatient.Id,
+            FullName = DemoPatient.FullName,
+            PhoneNumber = DemoPatient.PhoneNumber,
+            BirthDate = DateTime.UtcNow.AddYears(-30)
+        });
+        await db.SaveChangesAsync();
+        logger.LogInformation("Ensured demo patient {PatientId} ({Name}).", DemoPatient.Id, DemoPatient.FullName);
+    }
+
+    /// <summary>
+    /// Fills missing slots from 3 days ago through 10 days ahead (all specializations represented).
+    /// </summary>
+    private static async Task EnsureScheduleRangeAsync(AppDbContext db, ILogger logger)
+    {
+        List<Doctor> activeDoctors = await db.Doctors.AsNoTracking()
+            .Where(d => d.IsActive)
+            .ToListAsync();
+
+        if (activeDoctors.Count == 0)
+        {
+            return;
+        }
+
+        DateTime utcNow = DateTime.UtcNow;
+        (DateTime rangeStart, DateTime rangeEnd) = GetScheduleRange(utcNow);
+        List<DoctorSchedule> desired = CreateSchedulesForRange(activeDoctors, utcNow);
+
+        HashSet<(Guid DoctorId, DateTime StartTime)> existing = await db.DoctorSchedules
+            .AsNoTracking()
+            .Where(s => s.StartTime >= rangeStart && s.StartTime < rangeEnd)
+            .Select(s => new ValueTuple<Guid, DateTime>(s.DoctorId, s.StartTime))
+            .ToHashSetAsync();
+
+        List<DoctorSchedule> toAdd = desired
+            .Where(s => !existing.Contains((s.DoctorId, s.StartTime)))
+            .ToList();
+
+        if (toAdd.Count == 0)
+        {
+            return;
+        }
+
+        await db.DoctorSchedules.AddRangeAsync(toAdd);
+        await db.SaveChangesAsync();
+        logger.LogInformation(
+            "Ensured {Count} schedule slots from {From:yyyy-MM-dd} to {To:yyyy-MM-dd}.",
+            toAdd.Count,
+            rangeStart,
+            rangeEnd.AddDays(-1));
+    }
+
+    private static (DateTime Start, DateTime EndExclusive) GetScheduleRange(DateTime utcNow) =>
+        (utcNow.Date.AddDays(-ScheduleDaysBefore), utcNow.Date.AddDays(ScheduleDaysAfter + 1));
+
+    private static List<DoctorSchedule> CreateSchedulesForRange(IEnumerable<Doctor> doctors, DateTime utcNow)
+    {
+        int[] slotHours = [9, 10, 11, 14, 15, 16];
+        (DateTime rangeStart, DateTime rangeEnd) = GetScheduleRange(utcNow);
+        List<Doctor> activeDoctors = doctors.Where(d => d.IsActive).OrderBy(d => d.Id).ToList();
+        List<DoctorSchedule> schedules = [];
+
+        for (DateTime day = rangeStart; day < rangeEnd; day = day.AddDays(1))
+        {
+            foreach (Doctor doctor in GetDoctorsOnDutyForDay(activeDoctors, day))
             {
-                int dayOffset = faker.Random.Int(1, 10);
-                DateTime day = startDate.AddDays(dayOffset);
-
-                if (day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+                foreach (int hour in slotHours)
                 {
-                    day = day.AddDays(day.DayOfWeek == DayOfWeek.Saturday ? 2 : 1);
+                    DateTime slotStart = DateTime.SpecifyKind(day.AddHours(hour), DateTimeKind.Utc);
+
+                    schedules.Add(new DoctorSchedule
+                    {
+                        DoctorId = doctor.Id,
+                        StartTime = slotStart,
+                        EndTime = slotStart.AddMinutes(30)
+                    });
                 }
-
-                int hour = faker.Random.Int(9, 16);
-                int minute = faker.PickRandom(0, 30);
-                DateTime slotStart = day.AddHours(hour).AddMinutes(minute);
-                DateTime slotEnd = slotStart.AddMinutes(30);
-
-                schedules.Add(new DoctorSchedule
-                {
-                    DoctorId = doctor.Id,
-                    StartTime = slotStart,
-                    EndTime = slotEnd
-                });
             }
         }
 
@@ -201,6 +277,27 @@ public static class DatabaseMigrator
             .GroupBy(s => new { s.DoctorId, s.StartTime })
             .Select(g => g.First())
             .OrderBy(s => s.StartTime)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Sun–Thu: all active doctors. Fri–Sat: one on-call doctor per specialization (easy to test every specialty).
+    /// </summary>
+    private static List<Doctor> GetDoctorsOnDutyForDay(List<Doctor> activeDoctors, DateTime day)
+    {
+        if (activeDoctors.Count == 0)
+        {
+            return [];
+        }
+
+        if (day.DayOfWeek is not (DayOfWeek.Friday or DayOfWeek.Saturday))
+        {
+            return activeDoctors;
+        }
+
+        return activeDoctors
+            .GroupBy(d => d.SpecializationId)
+            .Select(g => g.OrderBy(d => d.Id).First())
             .ToList();
     }
 }
