@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
 
 namespace MediFlowAI.Services;
@@ -46,11 +47,31 @@ public sealed class AgentService(
             // Commit only a completed turn. A failed request must not leave a dangling user message.
             conversation.Messages.Add(userMessage);
             conversation.Messages.AddRange(response.Messages);
-            return response.Text;
+            return GetFinalAnswer(response);
         }
         finally
         {
             conversation.Gate.Release();
         }
+    }
+
+    private static string GetFinalAnswer(ChatResponse response)
+    {
+        string text = response.Messages.LastOrDefault(message => message.Role == ChatRole.Assistant)?.Text
+            ?? response.Text;
+
+        // Some OpenAI-compatible providers return an unclosed <think> preamble as text.
+        // Only the final assistant message is user-facing; tool-loop drafts must stay internal.
+        if (text.StartsWith("<think>", StringComparison.OrdinalIgnoreCase))
+        {
+            Match boundary = Regex.Match(text, @"(?:\r?\n\s*){3,}");
+            if (boundary.Success)
+            {
+                text = text[(boundary.Index + boundary.Length)..];
+            }
+        }
+
+        return Regex.Replace(text, @"<think>.*?</think>\s*", string.Empty,
+            RegexOptions.IgnoreCase | RegexOptions.Singleline).Trim();
     }
 }
