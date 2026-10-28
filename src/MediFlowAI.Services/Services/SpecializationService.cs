@@ -24,6 +24,7 @@ public class SpecializationService(AppDbContext db) : ISpecializationService
         string name,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
         string normalizedName = name.Trim().ToLower();
 
         return await db.Specializations

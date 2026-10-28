@@ -28,6 +28,8 @@ public class ScheduleService(AppDbContext db) : IScheduleService
         DateOnly toDate,
         CancellationToken cancellationToken = default)
     {
+        if (toDate < fromDate) throw new ArgumentException("toDate must be on or after fromDate.");
+
         DateTime rangeStart = fromDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         DateTime rangeEnd = toDate.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
 
@@ -49,7 +51,7 @@ public class ScheduleService(AppDbContext db) : IScheduleService
     public Task<bool> IsSlotAvailableAsync(Guid scheduleId, CancellationToken cancellationToken = default) =>
         db.DoctorSchedules
             .AsNoTracking()
-            .AnyAsync(s => s.Id == scheduleId && s.Appointment == null, cancellationToken);
+            .AnyAsync(s => s.Id == scheduleId && s.Appointment == null && s.StartTime > DateTime.UtcNow, cancellationToken);
 
     private static (DateTime Start, DateTime End) GetDateRange(DateOnly date)
     {

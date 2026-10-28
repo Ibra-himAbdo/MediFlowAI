@@ -41,7 +41,7 @@ public class DoctorService(AppDbContext db) : IDoctorService
                         .Where(d => d.IsActive && d.SpecializationId == specializationId)
                         .OrderByDescending(d => d.AverageRate)
                         .ThenByDescending(d => d.TotalReviews)
-                        .Take(take))
+                        .Take(ValidateTake(take)))
                 .ToListAsync(cancellationToken),
             slotsDate,
             cancellationToken);
@@ -51,6 +51,7 @@ public class DoctorService(AppDbContext db) : IDoctorService
         DateOnly? slotsDate = null,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(query);
         string normalizedQuery = query.Trim().ToLower();
 
         return await AttachAvailableSlotsAsync(
@@ -85,6 +86,7 @@ public class DoctorService(AppDbContext db) : IDoctorService
         DateOnly? slotsDate = null,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(specializationName);
         string normalizedName = specializationName.Trim().ToLower();
 
         return await AttachAvailableSlotsAsync(
@@ -99,6 +101,12 @@ public class DoctorService(AppDbContext db) : IDoctorService
                 .ToListAsync(cancellationToken),
             slotsDate,
             cancellationToken);
+    }
+
+    private static int ValidateTake(int take)
+    {
+        if (take is < 1 or > 100) throw new ArgumentOutOfRangeException(nameof(take), "take must be between 1 and 100.");
+        return take;
     }
 
     private static IQueryable<DoctorDto> ProjectDoctors(IQueryable<Doctor> query) =>
