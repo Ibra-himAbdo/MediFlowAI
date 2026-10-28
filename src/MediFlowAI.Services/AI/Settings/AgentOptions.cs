@@ -2,11 +2,14 @@
 
 public class AgentOptions
 {
-    public required bool IsOpenAI { get; set; }
-    public required string BaseUri { get; set; }
-    public required string ApiKey { get; set; }
-    public required string Model { get; set; }
-    public required string SystemPrompt { get; set; }
+    public Provider? Provider { get; set; }
+    public string? Endpoint { get; set; }
+    // Legacy configuration remains supported while deployments migrate.
+    public bool IsOpenAI { get; set; }
+    public string? BaseUri { get; set; }
+    public string ApiKey { get; set; } = string.Empty;
+    public string Model { get; set; } = string.Empty;
+    public string SystemPrompt { get; set; } = string.Empty;
 
     /// <summary>
     /// Optional file name or path under the API content root (e.g. system-prompt.md).
@@ -14,5 +17,6 @@ public class AgentOptions
     /// </summary>
     public string? SystemPromptFile { get; set; }
 
-    public double TimeoutSeconds { get; set; } = 15;
+    public double TimeoutSeconds { get; set; } = 60;
+    public int MaximumToolIterations { get; set; } = 12;
 }
