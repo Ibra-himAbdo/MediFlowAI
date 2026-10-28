@@ -2,7 +2,7 @@
 
 MediFlow AI is a **.NET 10 demonstration API** for a medical booking platform. It shows how a backend can expose real business logic through REST—and how an **LLM agent** can use that same logic via **function calling** (tools) to search doctors, check slots, book appointments, and add reviews in natural language.
 
-No direct database access from the AI: the model calls **25 tools** that run through your application services and Entity Framework, just like normal API code.
+No direct database access from the AI: the model calls **10 tools** that run through your application services and Entity Framework, just like normal API code.
 
 ---
 
@@ -22,7 +22,7 @@ No direct database access from the AI: the model calls **25 tools** that run thr
 
 ```text
 ┌─────────────┐     POST /api/Ai      ┌──────────────┐     tools      ┌─────────────────┐
-│   Client    │ ────────────────────► │ AgentService │ ─────────────► │ MediFlowAiTools │
+│   Client    │ ────────────────────► │ AgentService │ ─────────────► │ AiToolRegister  │
 │ (Scalar/UI) │                       │  + Groq LLM  │                └────────┬────────┘
 └─────────────┘                       └──────────────┘                         │
        │                                                                       ▼
@@ -35,7 +35,7 @@ No direct database access from the AI: the model calls **25 tools** that run thr
 
 ![Architecture overview](image.png)
 
-**Request flow (AI):** `AiController` → `AgentService` → LLM → `AiToolRegister` (25 snake_case tools) → `MediFlowAiTools` → `ISpecializationService` / `IPatientService` / `IDoctorService` / etc. → `AppDbContext`.
+**Request flow (AI):** `AiController` → `AgentService` → LLM → `AiToolRegister` (10 snake_case tools) → public service methods or `PatientAppointmentTools` → application services → `AppDbContext`.
 
 ---
 
@@ -51,7 +51,7 @@ MediFlowAI/
 │   └── test-apis-curl.md
 └── src/
     ├── MediFlowAI.Api/          → HTTP host, controllers, seed, system-prompt.md
-    ├── MediFlowAI.Services/     → Business logic + AI (AgentService, MediFlowAiTools)
+    ├── MediFlowAI.Services/     → Business logic + AI (AgentService, AiToolRegister)
     ├── MediFlowAI.Dto/          → API DTOs (DoctorDto, PatientDto, ChatRequest, …)
     ├── MediFlowAI.Domain/       → Entities
     └── MediFlowAI.Infrastructure/ → EF Core, migrations, configurations
@@ -122,7 +122,7 @@ Or omit `userId` to use the built-in **demo patient** (see below).
 
 ## AI integration (read this for demos)
 
-All AI behavior—configuration, **25 tools**, `MediFlowAiTools`, system prompt file, dummy data rules, **test questions**, and **curl commands**—is documented in:
+AI configuration, **10 tools**, direct service registration, patient context, workflows and configuration are documented in:
 
 ### [**AI Integration Steps.md**](AI%20Integration%20Steps.md)
 
@@ -131,10 +131,10 @@ That guide is the main reference for:
 - `AgentOptions`, `system-prompt.md`, and `SystemPromptResolver`
 - Tool catalog (specializations, patients, doctors, schedules, appointments, reviews)
 - Recommended flows (avoid invalid UUID / “no slots today” issues)
-- Copy-paste **AI test questions** and PowerShell/bash **curl** examples
-- Troubleshooting (`tool_use_failed`, booking, chat history)
+- Build commands and supported argument formats
+- Demo limitations: authentication, booking retries and chat history
 
-**Short summary:** User sends a message → Groq calls tools like `get_doctors_by_specialization_name` or `book_appointment` → `MediFlowAiTools` validates parameters and returns JSON → services hit the real database → the model replies in plain English.
+**Short summary:** User sends a message → Groq calls tools like `search_doctors` or `book_appointment` → registered service methods return typed DTOs; patient operations enforce request context and ownership → services hit the real database → the model replies in plain English.
 
 ---
 
@@ -201,8 +201,8 @@ Seeded and maintained in `DatabaseMigrator.cs`:
 
 ```json
 "AgentOptions": {
-  "IsOpenAI": false,
-  "BaseUri": "https://api.groq.com/openai/v1",
+  "Provider": "OpenAILike",
+  "Endpoint": "https://api.groq.com/openai/v1",
   "Model": "meta-llama/llama-4-scout-17b-16e-instruct",
   "SystemPromptFile": "system-prompt.md",
   "SystemPrompt": "..."
@@ -211,8 +211,8 @@ Seeded and maintained in `DatabaseMigrator.cs`:
 
 | Setting | Purpose |
 |---------|---------|
-| `IsOpenAI` | `true` = OpenAI; `false` = Groq (or compatible endpoint) |
-| `BaseUri` | Required when not using OpenAI official API |
+| `Provider` | `OpenAI` or `OpenAILike` (OpenAI-compatible endpoint) |
+| `Endpoint` | Required for `OpenAILike`, including the API base path such as `/openai/v1` |
 | `ApiKey` | Set via User Secrets or `AgentOptions__ApiKey` env var |
 | `SystemPromptFile` | Markdown prompt in the Api project (preferred if file exists) |
 
