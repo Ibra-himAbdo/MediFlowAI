@@ -17,6 +17,6 @@ public class AgentOptions
     /// </summary>
     public string? SystemPromptFile { get; set; }
 
-    public double TimeoutSeconds { get; set; } = 60;
+    public double TimeoutSeconds { get; set; } = 90;
     public int MaximumToolIterations { get; set; } = 12;
 }

@@ -25,7 +25,17 @@ public class AiController : ControllerBase
                 UserId = DemoPatient.IdString
             };
 
-        string response = await _agentService.ProcessAsync(request, cancellationToken);
-        return Ok(response);
+        try
+        {
+            string response = await _agentService.ProcessAsync(request, cancellationToken);
+            return Ok(response);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status504GatewayTimeout,
+                title: "The AI provider timed out.",
+                detail: "Please try the request again.");
+        }
     }
 }

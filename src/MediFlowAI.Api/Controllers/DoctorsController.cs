@@ -43,7 +43,7 @@ public class DoctorsController(IDoctorService doctorService) : ControllerBase
     [HttpGet("top/{specializationId:guid}")]
     public async Task<ActionResult<IReadOnlyList<DoctorDto>>> GetTopRated(
         Guid specializationId,
-        [FromQuery] int take = 5,
+        [FromQuery, System.ComponentModel.DataAnnotations.Range(1, 100)] int take = 5,
         [FromQuery] DateOnly? date = null,
         CancellationToken cancellationToken = default)
     {
