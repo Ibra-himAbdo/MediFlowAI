@@ -3,7 +3,9 @@ using Microsoft.Extensions.Logging;
 
 namespace MediFlowAI.Services;
 
-/// <summary>Explicit allow-list of service operations exposed to the booking assistant.</summary>
+/// <summary>
+/// Defines the small, explicit set of application operations available to the model.
+/// </summary>
 public sealed class AiToolRegister(
     ISpecializationService specializations,
     IDoctorService doctors,
@@ -14,20 +16,59 @@ public sealed class AiToolRegister(
 {
     public IReadOnlyList<AITool> GetAllTools(Guid? patientId = null)
     {
-        // This context is captured per request, never supplied by the model or stored on a singleton.
-        PatientAppointmentTools patient = new(appointments, reviews, patientId);
+        PatientAppointmentTools patientTools = new(appointments, reviews, patientId);
+
         return
         [
-            Create(GetDate, "get_date", "Current UTC date and time. Call before interpreting relative dates."),
-            Create(specializations.GetAllAsync, "get_all_specializations", "List specializations and their IDs."),
-            Create(doctors.GetAllAsync, "get_all_doctors", "List active doctors. Optional slotsDate: yyyy-MM-dd in UTC; omit or use null for no slots."),
-            Create(doctors.SearchDoctorsAsync, "search_doctors", "Find doctors by name or specialty. Results include fee, rating and availableSlots when slotsDate (yyyy-MM-dd UTC) is supplied. Ask the user to choose when multiple doctors match."),
-            Create(schedules.GetAvailableSlotsAsync, "get_available_slots", "Available slots for doctorId and date (yyyy-MM-dd UTC). Copy the slot ID to book."),
-            Create(reviews.GetDoctorReviewsAsync, "get_doctor_reviews", "List published reviews for doctorId."),
-            Create(patient.GetAppointmentsAsync, "get_patient_appointments", "List the current patient's appointments. Patient identity comes from request context."),
-            Create(patient.BookAsync, "book_appointment", "Book doctorScheduleId for the current patient after they choose the doctor, date and time."),
-            Create(patient.CancelAsync, "cancel_appointment", "Cancel an appointment belonging to the current patient when requested."),
-            Create(patient.AddReviewAsync, "add_review", "Review the current patient's completed appointment. rate: 1-5; comment is optional. Cannot complete appointments.")
+            Create(
+                GetDate,
+                "get_date",
+                "Get the current UTC date and time. Use it before interpreting relative dates."),
+
+            Create(
+                specializations.GetAllAsync,
+                "get_all_specializations",
+                "List the available medical specializations and their IDs."),
+
+            Create(
+                doctors.GetAllAsync,
+                "get_all_doctors",
+                "List active doctors. Set slotsDate to yyyy-MM-dd UTC to include available slots."),
+
+            Create(
+                doctors.SearchDoctorsAsync,
+                "search_doctors",
+                "Find doctors by doctor or specialty name. Set slotsDate to include fees, ratings, and available slots."),
+
+            Create(
+                schedules.GetAvailableSlotsAsync,
+                "get_available_slots",
+                "List available slots for a doctor and UTC date. Copy a slot ID before booking."),
+
+            Create(
+                reviews.GetDoctorReviewsAsync,
+                "get_doctor_reviews",
+                "List published reviews for a doctor."),
+
+            Create(
+                patientTools.GetAppointmentsAsync,
+                "get_patient_appointments",
+                "List appointments for the patient bound to the current request."),
+
+            Create(
+                patientTools.BookAsync,
+                "book_appointment",
+                "Book a selected doctorScheduleId for the current patient."),
+
+            Create(
+                patientTools.CancelAsync,
+                "cancel_appointment",
+                "Cancel an appointment owned by the current patient."),
+
+            Create(
+                patientTools.AddReviewAsync,
+                "add_review",
+                "Review an owned, completed appointment. Rate must be 1-5; comment is optional.")
         ];
     }
 
@@ -39,6 +80,7 @@ public sealed class AiToolRegister(
         }), logger);
 
     private static CurrentDate GetDate() => new(DateTime.UtcNow);
+
     private sealed record CurrentDate(DateTime UtcNow)
     {
         public DateOnly UtcToday => DateOnly.FromDateTime(UtcNow);
