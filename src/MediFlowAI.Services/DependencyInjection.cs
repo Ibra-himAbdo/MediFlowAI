@@ -1,3 +1,5 @@
+using Microsoft.Extensions.AI;
+
 namespace MediFlowAI.Services;
 
 public static class DependencyInjection
@@ -14,7 +16,8 @@ public static class DependencyInjection
         services.Configure<AgentOptions>(configuration.GetSection(nameof(AgentOptions)));
 
         services.AddSingleton<IChatClientFactory, ChatClientFactory>();
-        services.AddSingleton<Microsoft.Extensions.AI.IChatClient>(sp => sp.GetRequiredService<IChatClientFactory>().Create());
+        services.AddChatClient(serviceProvider =>
+            serviceProvider.GetRequiredService<IChatClientFactory>().Create());
 
         services.AddScoped<AiToolRegister>();
         services.AddScoped<IAgentService, AgentService>();
