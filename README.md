@@ -44,7 +44,7 @@ No direct database access from the AI: the model calls **10 tools** that run thr
 ```
 MediFlowAI/
 ├── README.md
-├── AI Integration Steps.md      ← Full AI setup, tools, test questions, commands
+├── AI Integration Steps.md      ← Reusable step-by-step AI integration guide
 ├── image.png
 ├── scripts/
 │   ├── test-apis.ps1            ← REST smoke test (curl)
@@ -122,17 +122,18 @@ Or omit `userId` to use the built-in **demo patient** (see below).
 
 ## AI integration (read this for demos)
 
-AI configuration, **10 tools**, direct service registration, patient context, workflows and configuration are documented in:
+AI configuration, **10 tools**, direct service registration, patient context, and the complete integration pattern are documented in:
 
 ### [**AI Integration Steps.md**](AI%20Integration%20Steps.md)
 
 That guide is the main reference for:
 
 - `AgentOptions`, `system-prompt.md`, and `SystemPromptResolver`
-- Tool catalog (specializations, patients, doctors, schedules, appointments, reviews)
-- Recommended flows (avoid invalid UUID / “no slots today” issues)
-- Build commands and supported argument formats
-- Demo limitations: authentication, booking retries and chat history
+- Provider factory and dependency-injection setup
+- Direct service methods as typed AI tools
+- Request-bound patient actions and ownership checks
+- Prompt, chat history, timeout, and final-response handling
+- Validation steps and production considerations
 
 **Short summary:** User sends a message → Groq calls tools like `search_doctors` or `book_appointment` → registered service methods return typed DTOs; patient operations enforce request context and ownership → services hit the real database → the model replies in plain English.
 
@@ -205,6 +206,8 @@ Seeded and maintained in `DatabaseMigrator.cs`:
   "Endpoint": "https://api.groq.com/openai/v1",
   "Model": "meta-llama/llama-4-scout-17b-16e-instruct",
   "SystemPromptFile": "system-prompt.md",
+  "TimeoutSeconds": 90,
+  "MaximumToolIterations": 12,
   "SystemPrompt": "..."
 }
 ```
@@ -215,6 +218,8 @@ Seeded and maintained in `DatabaseMigrator.cs`:
 | `Endpoint` | Required for `OpenAILike`, including the API base path such as `/openai/v1` |
 | `ApiKey` | Set via User Secrets or `AgentOptions__ApiKey` env var |
 | `SystemPromptFile` | Markdown prompt in the Api project (preferred if file exists) |
+| `TimeoutSeconds` | Maximum duration of one AI request, including tool calls |
+| `MaximumToolIterations` | Stops an accidental or unproductive tool loop |
 
 Edit **`src/MediFlowAI.Api/system-prompt.md`** to tune AI behavior without changing C#.
 
@@ -233,7 +238,7 @@ Edit **`src/MediFlowAI.Api/system-prompt.md`** to tune AI behavior without chang
 
 | Document | Contents |
 |----------|----------|
-| **[AI Integration Steps.md](AI%20Integration%20Steps.md)** | Complete AI guide: tools, prompts, tests, commands, troubleshooting |
+| **[AI Integration Steps.md](AI%20Integration%20Steps.md)** | Step-by-step guide for reusing the AI/service-layer pattern |
 | **[scripts/test-apis-curl.md](scripts/test-apis-curl.md)** | Manual curl examples for REST |
 | **[LICENSE](LICENSE)** | MIT License |
 | **This README** | Project overview, quick start, API summary |
@@ -246,9 +251,9 @@ Use these in `POST /api/Ai` (see [AI Integration Steps.md](AI%20Integration%20St
 
 1. *What specializations are available?*  
 2. *Show Pediatrics doctors and available slots tomorrow*  
-3. *Search for a patient named Demo*  
-4. *Book the first morning slot for me*  
-5. *Show my appointments, complete the last one, and leave a 5-star review*
+3. *Which Cardiology doctor has the highest rating?*
+4. *Book the 10:00 UTC slot after I confirm it*
+5. *Show my appointments and cancel the selected pending appointment*
 
 Use the same `userId` across a booking conversation, or rely on the default demo patient.
 
