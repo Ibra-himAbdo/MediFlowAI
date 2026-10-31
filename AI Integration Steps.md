@@ -30,6 +30,19 @@ AiToolRegister ──► Application services ──► AppDbContext
 
 `AiToolRegister` is an allow-list, not another service layer. Read operations point directly to existing service methods. A small wrapper is used only where an operation needs context that the model must not control, such as the current patient ID.
 
+The source is grouped by responsibility:
+
+```text
+AI/
+├── Agent/          # Chat orchestration and public agent contract
+├── Configuration/  # Options, provider selection, and prompt loading
+├── Providers/      # IChatClient construction
+├── Tools/          # Tool catalog, patient context, and error mapping
+└── README.md        # Short reading order for new contributors
+```
+
+The folders all use the same `MediFlowAI.Services` namespace. They make navigation clearer without creating extra architectural layers.
+
 ## 1. Install the AI packages
 
 The Services project references:

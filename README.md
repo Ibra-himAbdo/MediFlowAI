@@ -51,7 +51,7 @@ MediFlowAI/
 │   └── test-apis-curl.md
 └── src/
     ├── MediFlowAI.Api/          → HTTP host, controllers, seed, system-prompt.md
-    ├── MediFlowAI.Services/     → Business logic + AI (AgentService, AiToolRegister)
+    ├── MediFlowAI.Services/     → Business logic + organized AI integration
     ├── MediFlowAI.Dto/          → API DTOs (DoctorDto, PatientDto, ChatRequest, …)
     ├── MediFlowAI.Domain/       → Entities
     └── MediFlowAI.Infrastructure/ → EF Core, migrations, configurations
@@ -242,6 +242,7 @@ Edit **`src/MediFlowAI.Api/system-prompt.md`** to tune AI behavior without chang
 | **[scripts/test-apis-curl.md](scripts/test-apis-curl.md)** | Manual curl examples for REST |
 | **[LICENSE](LICENSE)** | MIT License |
 | **This README** | Project overview, quick start, API summary |
+| **[AI source guide](src/MediFlowAI.Services/AI/README.md)** | Folder responsibilities and the shortest code-reading path |
 
 ---
 
